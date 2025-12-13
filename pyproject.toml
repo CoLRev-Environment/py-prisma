@@ -1,0 +1,27 @@
+[project]
+name = "py-prisma"
+version = "0.1.0"
+description = "A Python package to create PRISMA flow charts"
+license = {text = "MIT"}
+authors = [
+    { name = "Gerit Wagner", email = "gerit.wagner@uni-bamberg.de" }
+ ]
+requires-python = ">=3.8, <4"
+
+[project.urls]
+repository = "https://github.com/CoLRev-Environment/colrev/tree/main/colrev/packages/py-prisma"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.colrev]
+colrev_doc_description = "Py-PRISMA"
+colrev_doc_link = "README.md"
+search_types = []
+
+[project.entry-points.colrev]
+data = "colrev.packages.py-prisma.src.py_prisma:PRISMA"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
