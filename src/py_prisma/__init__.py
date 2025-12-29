@@ -1,21 +1,21 @@
-from __future__ import annotations
 """Package for py-prisma."""
+
+from dataclasses import asdict
+from pathlib import Path
+
+from .loader import load_status_from_records
+from .loader import PrismaStatus
+from .prisma import plot_prisma2020
 
 __author__ = "Gerit Wagner"
 __email__ = "gerit.wagner@uni-bamberg.de"
 
-from .loader import PrismaStatus, load_status_from_records
-from .plotter import plot_simple_prisma
-from pathlib import Path
-
-from .loader import load_status_from_records
-from .plotter import plot_simple_prisma
-
 __all__ = [
     "PrismaStatus",
     "load_status_from_records",
-    "plot_simple_prisma",
+    "plot_prisma2020",
 ]
+
 
 def plot_prisma_from_records(
     *,
@@ -23,5 +23,11 @@ def plot_prisma_from_records(
     output_path: str | Path = "prisma.png",
     show: bool = False,
 ) -> None:
-    status = load_status_from_records(records_path)
-    plot_simple_prisma(status, filename=output_path, show=show)
+
+    params = load_status_from_records(records_path)
+
+    plot_prisma2020(
+        **asdict(params),
+        filename=str(output_path),
+        show=show,
+    )

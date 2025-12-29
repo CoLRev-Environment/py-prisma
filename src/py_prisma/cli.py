@@ -3,8 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .loader import load_status_from_records
-from .plotter import plot_simple_prisma
+from py_prisma import plot_prisma_from_records
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,8 +35,8 @@ def main(argv: list[str] | None = None) -> int:
     if not args.records.exists():
         raise FileNotFoundError(f"Records file not found: {args.records}")
 
-    status = load_status_from_records(args.records)
-    plot_simple_prisma(status, filename=args.output, show=args.show)
+    plot_prisma_from_records(output_path=args.output, show=args.show)
+
     return 0
 
 
