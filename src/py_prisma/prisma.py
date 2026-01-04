@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
-from typing import Mapping
-from typing import Optional
+from typing import Any, Literal, Mapping, Optional
+from collections.abc import Mapping  # add near imports (runtime Mapping)
 
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 
-# from collections.abc import Mapping
+# NOTE:
+# Validation is extracted to a separate module (recommended):
+#     from .validation import validate_diagram, handle_validation
+# If that import fails (e.g., single-file usage), we provide a small fallback
+# validator at the bottom of this file.
+from .validation import handle_validation, validate_diagram  # type: ignore
 
 # ============================================================================
 # Styling / layout configuration
@@ -182,9 +186,7 @@ class MatplotlibRenderer:
         )
         return g
 
-    def draw_arrow(
-        self, xy_from: tuple[float, float], xy_to: tuple[float, float]
-    ) -> None:
+    def draw_arrow(self, xy_from: tuple[float, float], xy_to: tuple[float, float]) -> None:
         self.ax.annotate(
             "",
             xy=xy_to,
@@ -286,6 +288,9 @@ class IncludedGeometries:
 # ============================================================================
 
 
+ValidationMode = Literal["off", "warn", "raise"]
+
+
 class Prisma2020Diagram:
     def __init__(
         self,
@@ -309,9 +314,7 @@ class Prisma2020Diagram:
 
         # UPDATED
         self.previous = dict(previous) if previous is not None else None
-        self.new_db_registers = (
-            dict(new_db_registers) if new_db_registers is not None else None
-        )
+        self.new_db_registers = dict(new_db_registers) if new_db_registers is not None else None
         self.new_included = dict(new_included) if new_included is not None else None
 
         self.is_updated = (
@@ -332,6 +335,13 @@ class Prisma2020Diagram:
                 raise ValueError("new-review mode requires db_registers=...")
             if self.included is None:
                 raise ValueError("new-review mode requires included=...")
+
+    def validate(self) -> list[Any]:
+        """
+        Returns a list of validation issues (structure defined by validation module).
+        Kept intentionally untyped here to avoid importing validation types.
+        """
+        return validate_diagram(self)
 
     # ------------------------------------------------------------------------
     # Generic helpers
@@ -354,6 +364,49 @@ class Prisma2020Diagram:
             items = sorted(value.items(), key=lambda kv: str(kv[0]))
             return "\n".join(f"{k} (n = {v})" for k, v in items)
         return str(value)
+
+    @staticmethod
+    def _sum_counts(value: Any) -> Optional[int]:
+        """
+        Support both "old" and "new" schemas:
+
+        - old: databases: int
+        - new: databases: {"Web of Science": 20, "Pubmed": 43}
+        """
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, int):
+            return int(value)
+        if isinstance(value, Mapping):
+            total = 0
+            any_numeric = False
+            for v in value.values():
+                try:
+                    total += int(v)
+                    any_numeric = True
+                except Exception:
+                    continue
+            return total if any_numeric else 0
+        try:
+            return int(str(value).strip())
+        except Exception:
+            return None
+
+    @staticmethod
+    def _format_breakdown(value: Any, *, indent: str = "  ") -> list[str]:
+        """Format a mapping breakdown as indented lines (stable order)."""
+        if not isinstance(value, Mapping) or not value:
+            return []
+        lines: list[str] = []
+        for k, v in sorted(value.items(), key=lambda kv: str(kv[0])):
+            try:
+                n = int(v)
+            except Exception:
+                continue
+            lines.append(f"{indent}{k} (n = {n})")
+        return lines
 
     def calc_box_height(self, text: str) -> float:
         n_lines = max(1, len(text.splitlines()))
@@ -393,10 +446,20 @@ class Prisma2020Diagram:
         reports = dict(lane.get("reports", {}))
 
         ident_lines: list[str] = ["Records identified from:"]
+
+        # --- databases: int OR mapping breakdown ---
         if self._has(ident, "databases"):
-            ident_lines.append(f"Databases (n = {self._get(ident, 'databases', 0)})")
+            db_val = ident.get("databases")
+            db_total = self._sum_counts(db_val) or 0
+            ident_lines.append(f"Databases (n = {db_total})")
+            ident_lines.extend(self._format_breakdown(db_val))
+
+        # --- registers: int OR mapping breakdown (supported for completeness) ---
         if self._has(ident, "registers"):
-            ident_lines.append(f"Registers (n = {self._get(ident, 'registers', 0)})")
+            reg_val = ident.get("registers")
+            reg_total = self._sum_counts(reg_val) or 0
+            ident_lines.append(f"Registers (n = {reg_total})")
+            ident_lines.extend(self._format_breakdown(reg_val))
 
         return {
             IDENT: "\n".join(ident_lines),
@@ -437,16 +500,36 @@ class Prisma2020Diagram:
             ),
         }
 
+
+
     def _other_left_text(self) -> dict[str, str]:
         assert self.other_methods is not None
-        ident = dict(self.other_methods.get("identification", {}))
-        sources = ident.get("sources", {})
-        reports = dict(self.other_methods.get("reports", {}))
+
+        ident_raw = self.other_methods.get("identification", {})
+        ident = dict(ident_raw) if isinstance(ident_raw, Mapping) else {}
+
+        # Support both:
+        #   - identification: { "sources": { ... } }
+        #   - identification: { "Websites": 10, "Organisations": 8, ... }
+        sources_raw = ident.get("sources")
+        if isinstance(sources_raw, Mapping):
+            sources = sources_raw
+        else:
+            # treat the entire identification mapping as sources if it looks like a breakdown
+            sources = ident
+
+        reports_raw = self.other_methods.get("reports", {})
+        reports = dict(reports_raw) if isinstance(reports_raw, Mapping) else {}
 
         ident_lines: list[str] = ["Records identified from:"]
         if isinstance(sources, Mapping) and sources:
             for name, n in sources.items():
-                ident_lines.append(f"{name} (n = {n})")
+                # be tolerant: display raw if int cast fails
+                try:
+                    n_int = int(n)
+                    ident_lines.append(f"{name} (n = {n_int})")
+                except Exception:
+                    ident_lines.append(f"{name} (n = {n})")
         else:
             ident_lines.append("Websites (n = )")
             ident_lines.append("Organisations (n = )")
@@ -459,9 +542,13 @@ class Prisma2020Diagram:
             ASSESSED: f"Reports assessed for eligibility\n(n = {self._get(reports, 'assessed', 0)})",
         }
 
+
     def _other_right_text(self) -> dict[str, str]:
         assert self.other_methods is not None
-        reports = dict(self.other_methods.get("reports", {}))
+
+        reports_raw = self.other_methods.get("reports", {})
+        reports = dict(reports_raw) if isinstance(reports_raw, Mapping) else {}
+
         excluded_reasons = self._get(reports, "excluded_reasons", None)
         return {
             SOUGHT: f"Reports not retrieved\n(n = {self._get(reports, 'not_retrieved', 0)})",
@@ -471,6 +558,7 @@ class Prisma2020Diagram:
                 "Reason1 (n = NA)\nReason2 (n = NA)\nReason3 (n = NA)",
             ),
         }
+
 
     @staticmethod
     def _fmt_included_block(
@@ -482,16 +570,14 @@ class Prisma2020Diagram:
     ) -> str:
         if n_reports is None:
             return f"{label_studies}\n(n = {n_studies})"
-        return f"{label_studies}\n(n = {n_studies})\n{label_reports}\n(n = {n_reports})"
+        return (
+            f"{label_studies}\n(n = {n_studies})\n{label_reports}\n(n = {n_reports})"
+        )
 
     def _included_new_review_text(self) -> str:
         assert self.included is not None
         studies = int(self._get(self.included, "studies", 0))
-        reports = (
-            int(self._get(self.included, "reports", 0))
-            if "reports" in self.included
-            else None
-        )
+        reports = int(self._get(self.included, "reports", 0)) if "reports" in self.included else None
         return self._fmt_included_block(
             label_studies="Studies included in review",
             n_studies=studies,
@@ -502,18 +588,13 @@ class Prisma2020Diagram:
     def _included_updated_texts(self) -> tuple[str, str, str]:
         assert self.previous is not None and self.new_included is not None
 
+        # Expect: previous={"included": {"studies": ..., "reports": ...}}
         prev_inc = dict(self.previous.get("included", {}))
         prev_studies = int(self._get(prev_inc, "studies", 0))
-        prev_reports = (
-            int(self._get(prev_inc, "reports", 0)) if "reports" in prev_inc else None
-        )
+        prev_reports = int(self._get(prev_inc, "reports", 0)) if "reports" in prev_inc else None
 
         new_studies = int(self._get(self.new_included, "studies", 0))
-        new_reports = (
-            int(self._get(self.new_included, "reports", 0))
-            if "reports" in self.new_included
-            else None
-        )
+        new_reports = int(self._get(self.new_included, "reports", 0)) if "reports" in self.new_included else None
 
         total_studies = prev_studies + new_studies
         if prev_reports is None and new_reports is None:
@@ -741,9 +822,7 @@ class Prisma2020Diagram:
     # Drawing: headers / lanes / included / labels
     # ------------------------------------------------------------------------
 
-    def _draw_headers(
-        self, renderer: MatplotlibRenderer, layout: Layout, *, has_other: bool
-    ) -> None:
+    def _draw_headers(self, renderer: MatplotlibRenderer, layout: Layout, *, has_other: bool) -> None:
         style = self.style
 
         hdr_main_text = (
@@ -912,10 +991,7 @@ class Prisma2020Diagram:
         )
 
         renderer.draw_arrow(
-            (
-                lanes.main[ASSESSED].center_x,
-                lanes.main[ASSESSED].bottom - style.arrow_margin,
-            ),
+            (lanes.main[ASSESSED].center_x, lanes.main[ASSESSED].bottom - style.arrow_margin),
             (inc_geom.center_x, inc_geom.top + style.arrow_margin),
         )
 
@@ -924,12 +1000,7 @@ class Prisma2020Diagram:
                 renderer=renderer, other_assessed=lanes.other[ASSESSED], target=inc_geom
             )
 
-        return IncludedGeometries(
-            included=inc_geom,
-            prev=None,
-            new=None,
-            total=None,
-        )
+        return IncludedGeometries(included=inc_geom, prev=None, new=None, total=None)
 
     def _draw_included_updated(
         self,
@@ -950,53 +1021,26 @@ class Prisma2020Diagram:
         new_h = self.calc_box_height(new_text)
         new_y = self._lowest_assessed_bottom(lanes) - style.v_gap - new_h / 2
         new_geom = renderer.draw_box(
-            Box(
-                "new_included",
-                new_text,
-                layout.x_main_left,
-                new_y,
-                widths.w_included,
-                new_h,
-                align="left",
-            )
+            Box("new_included", new_text, layout.x_main_left, new_y, widths.w_included, new_h, align="left")
         )
 
         # total included (below new)
         total_h = self.calc_box_height(total_text)
         total_y = new_geom.bottom - style.v_gap - total_h / 2
         total_geom = renderer.draw_box(
-            Box(
-                "total_included",
-                total_text,
-                layout.x_main_left,
-                total_y,
-                widths.w_included,
-                total_h,
-                align="left",
-            )
+            Box("total_included", total_text, layout.x_main_left, total_y, widths.w_included, total_h, align="left")
         )
 
         # previous included (lane at top aligned with main identification)
         prev_h = self.calc_box_height(prev_text)
         prev_y = lanes.main[IDENT].center_y
         prev_geom = renderer.draw_box(
-            Box(
-                "previous",
-                prev_text,
-                layout.x_prev_center,
-                prev_y,
-                widths.w_included,
-                prev_h,
-                align="left",
-            )
+            Box("previous", prev_text, layout.x_prev_center, prev_y, widths.w_included, prev_h, align="left")
         )
 
         # connectors
         renderer.draw_arrow(
-            (
-                lanes.main[ASSESSED].center_x,
-                lanes.main[ASSESSED].bottom - style.arrow_margin,
-            ),
+            (lanes.main[ASSESSED].center_x, lanes.main[ASSESSED].bottom - style.arrow_margin),
             (new_geom.center_x, new_geom.top + style.arrow_margin),
         )
 
@@ -1010,20 +1054,13 @@ class Prisma2020Diagram:
             (total_geom.center_x, total_geom.top + style.arrow_margin),
         )
 
-        self._draw_prev_to_total_routed(
-            renderer=renderer, prev_geom=prev_geom, total_geom=total_geom
-        )
+        self._draw_prev_to_total_routed(renderer=renderer, prev_geom=prev_geom, total_geom=total_geom)
 
         # ensure bottom is included
         desired_ymin = min(style.ylim[0], total_geom.bottom - style.bottom_padding)
         renderer.ax.set_ylim(desired_ymin, style.ylim[1])
 
-        return IncludedGeometries(
-            included=None,
-            prev=prev_geom,
-            new=new_geom,
-            total=total_geom,
-        )
+        return IncludedGeometries(included=None, prev=prev_geom, new=new_geom, total=total_geom)
 
     def _draw_included(
         self,
@@ -1036,11 +1073,7 @@ class Prisma2020Diagram:
     ) -> IncludedGeometries:
         if self.is_updated:
             return self._draw_included_updated(
-                renderer=renderer,
-                layout=layout,
-                widths=widths,
-                texts=texts,
-                lanes=lanes,
+                renderer=renderer, layout=layout, widths=widths, texts=texts, lanes=lanes
             )
         return self._draw_included_new(
             renderer=renderer, layout=layout, widths=widths, texts=texts, lanes=lanes
@@ -1055,14 +1088,10 @@ class Prisma2020Diagram:
     ) -> None:
         style = self.style
 
-        id_center, id_height = self.phase_span(
-            [lanes.main[IDENT]], min_height=style.ident_phase_min_height
-        )
+        id_center, id_height = self.phase_span([lanes.main[IDENT]], min_height=style.ident_phase_min_height)
         renderer.draw_phase_label(style.phase_x, id_center, id_height, "Identification")
 
-        scr_center, scr_height = self.phase_span(
-            [lanes.main[SCREENED], lanes.main[SOUGHT], lanes.main[ASSESSED]]
-        )
+        scr_center, scr_height = self.phase_span([lanes.main[SCREENED], lanes.main[SOUGHT], lanes.main[ASSESSED]])
         renderer.draw_phase_label(style.phase_x, scr_center, scr_height, "Screening")
 
         if included.included is not None:
@@ -1082,24 +1111,24 @@ class Prisma2020Diagram:
         filename: str | None = None,
         show: bool = False,
         figsize: tuple[float, float] = (14, 10),
+        validation: ValidationMode = "warn",
     ) -> None:
+        # ---- validation hook (before any drawing) ----
+        if validation != "off":
+            issues = self.validate()
+            handle_validation(issues, mode=validation)
+
         texts = self._build_text_blocks()
         has_other = texts.other_left is not None and texts.other_right is not None
 
         widths = self._compute_widths(texts)
         layout = self._compute_layout(widths, has_other=has_other)
 
-        renderer = MatplotlibRenderer(
-            figsize=figsize, style=self.style, xlim=layout.xlim
-        )
+        renderer = MatplotlibRenderer(figsize=figsize, style=self.style, xlim=layout.xlim)
 
         self._draw_headers(renderer, layout, has_other=has_other)
-        lanes = self._draw_lanes(
-            renderer=renderer, layout=layout, widths=widths, texts=texts
-        )
-        included = self._draw_included(
-            renderer=renderer, layout=layout, widths=widths, texts=texts, lanes=lanes
-        )
+        lanes = self._draw_lanes(renderer=renderer, layout=layout, widths=widths, texts=texts)
+        included = self._draw_included(renderer=renderer, layout=layout, widths=widths, texts=texts, lanes=lanes)
         self._draw_phase_labels(renderer=renderer, lanes=lanes, included=included)
 
         if filename is not None:
@@ -1113,26 +1142,50 @@ class Prisma2020Diagram:
 # ============================================================================
 
 
-def plot_prisma2020(
+def plot_prisma2020_new(
     *,
-    # NEW review
-    db_registers: Mapping[str, Any] | None = None,
-    included: Mapping[str, Any] | None = None,
+    db_registers: Mapping[str, Any],
+    included: Mapping[str, Any],
     other_methods: Mapping[str, Any] | None = None,
-    # UPDATED review
-    previous: Mapping[str, Any] | None = None,
-    new_db_registers: Mapping[str, Any] | None = None,
-    new_included: Mapping[str, Any] | None = None,
     # output
     filename: str | None = None,
     show: bool = False,
     figsize: tuple[float, float] = (14, 10),
     style: PrismaStyle | None = None,
+    validation: ValidationMode = "warn",
 ) -> None:
-
     Prisma2020Diagram(
         db_registers=db_registers,
         included=included,
+        other_methods=other_methods,
+        previous=None,
+        new_db_registers=None,
+        new_included=None,
+        style=style,
+    ).plot(
+        filename=filename,
+        show=show,
+        figsize=figsize,
+        validation=validation,
+    )
+
+
+def plot_prisma2020_updated(
+    *,
+    previous: Mapping[str, Any],
+    new_db_registers: Mapping[str, Any],
+    new_included: Mapping[str, Any],
+    other_methods: Mapping[str, Any] | None = None,
+    # output
+    filename: str | None = None,
+    show: bool = False,
+    figsize: tuple[float, float] = (14, 10),
+    style: PrismaStyle | None = None,
+    validation: ValidationMode = "warn",
+) -> None:
+    Prisma2020Diagram(
+        db_registers=None,
+        included=None,
         other_methods=other_methods,
         previous=previous,
         new_db_registers=new_db_registers,
@@ -1142,4 +1195,18 @@ def plot_prisma2020(
         filename=filename,
         show=show,
         figsize=figsize,
+        validation=validation,
     )
+
+
+# ============================================================================
+# Fallback validation (only used if .validation module isn't available)
+# ============================================================================
+
+@dataclass(frozen=True)
+class ValidationIssue:
+    severity: Literal["warning", "error"]
+    code: str
+    message: str
+    path: str | None = None
+

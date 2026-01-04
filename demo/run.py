@@ -1,5 +1,6 @@
-from py_prisma import plot_prisma2020
+from py_prisma import plot_prisma2020_new, plot_prisma2020_updated
 from py_prisma import plot_prisma_from_records
+from pathlib import Path
 
 if __name__ == "__main__":
 
@@ -11,7 +12,9 @@ if __name__ == "__main__":
     # PRISMA 2020 — New systematic review (databases + registers only) (v1)
     # Template: "Identification of studies via databases and registers"
     # ------------------------------------------------------------
-    plot_prisma2020(
+    print("\n---------------------------------------------------")
+    print("new.png")
+    plot_prisma2020_new(
         db_registers={
             "identification": {"databases": 1842, "registers": 73},
             "removed_before_screening": {
@@ -34,14 +37,16 @@ if __name__ == "__main__":
         },
         # NEW-review mode: included is part of the (single) pipeline
         included={"studies": 38, "reports": 52},
-        filename="prisma_new_db_registers.png",
+        filename="new.png",
     )
 
     # ------------------------------------------------------------
     # PRISMA 2020 — New systematic review (db + registers + other sources) (v2)
     # Includes "other methods" lane.
     # ------------------------------------------------------------
-    plot_prisma2020(
+    print("\n---------------------------------------------------")
+    print("new_other-methods.png")
+    plot_prisma2020_new(
         db_registers={
             "identification": {"databases": 1842, "registers": 73},
             "removed_before_screening": {
@@ -65,11 +70,9 @@ if __name__ == "__main__":
         included={"studies": 40, "reports": 56},
         other_methods={
             "identification": {
-                "sources": {
                     "Websites": 22,
                     "Organisations": 15,
                     "Citation searching": 41,
-                }
             },
             "removed_before_screening": {"duplicates": 0, "automation": 0, "other": 0},
             "records": {"screened": 78, "excluded": 60},
@@ -81,17 +84,20 @@ if __name__ == "__main__":
             },
             "included": {"studies": 5, "reports": 6},
         },
-        filename="prisma_new_db_registers_other.png",
+        filename="new_other-methods.png",
     )
 
-    # # ------------------------------------------------------------
-    # # Optional: New review "databases only" (registers omitted or 0)
-    # # ------------------------------------------------------------
-    plot_prisma2020(
+    # ------------------------------------------------------------
+    # Optional: New review "databases only" (registers omitted or 0)
+    # ------------------------------------------------------------
+    # TODO : registers are not really omitted...
+    print("\n---------------------------------------------------")
+    print("new-db-only.png")
+    plot_prisma2020_new(
         db_registers={
             "identification": {"databases": 120, "registers": 0},
             "removed_before_screening": {"duplicates": 30, "automation": 0, "other": 0},
-            "records": {"screened": 98, "excluded": 60},
+            "records": {"screened": 90, "excluded": 60},
             "reports": {
                 "sought": 38,
                 "not_retrieved": 4,
@@ -104,21 +110,23 @@ if __name__ == "__main__":
             },
         },
         included={"studies": 10},
-        filename="prisma_databases_only.png",
+        filename="new-db-only.png",
     )
 
-    # # ============================================================
-    # # UPDATED SYSTEMATIC REVIEW
-    # # (updated mode is triggered by providing "previous")
-    # # ============================================================
+    # ============================================================
+    # UPDATED SYSTEMATIC REVIEW
+    # (updated mode is triggered by providing "previous")
+    # ============================================================
 
-    # # ------------------------------------------------------------
-    # # PRISMA 2020 — Updated systematic review (databases + registers only) (v1)
+    # ------------------------------------------------------------
+    # PRISMA 2020 — Updated systematic review (databases + registers only) (v1)
     # #
-    # # Key rule: new_db_registers must NOT have "included".
-    # # New included is passed separately as new_included={...}.
-    # # ------------------------------------------------------------
-    plot_prisma2020(
+    # Key rule: new_db_registers must NOT have "included".
+    # New included is passed separately as new_included={...}.
+    # ------------------------------------------------------------
+    print("\n---------------------------------------------------")
+    print("updated.png")
+    plot_prisma2020_updated(
         previous={
             "included": {"studies": 58, "reports": 74},
         },
@@ -145,14 +153,16 @@ if __name__ == "__main__":
             "studies": 15,
             "reports": 19,
         },
-        filename="prisma_updated_db_registers.png",
+        filename="updated.png",
     )
 
-    # # ------------------------------------------------------------
-    # # PRISMA 2020 — Updated systematic review (db + registers + other sources) (v2)
-    # # Two NEW-only lanes + new_included (combined across lanes).
-    # # ------------------------------------------------------------
-    plot_prisma2020(
+    # ------------------------------------------------------------
+    # PRISMA 2020 — Updated systematic review (db + registers + other sources) (v2)
+    # Two NEW-only lanes + new_included (combined across lanes).
+    # ------------------------------------------------------------
+    print("\n---------------------------------------------------")
+    print("updated-other-methods.png")
+    plot_prisma2020_updated(
         previous={
             "included": {"studies": 58, "reports": 74},
         },
@@ -177,11 +187,9 @@ if __name__ == "__main__":
         },
         other_methods={
             "identification": {
-                "sources": {
                     "Websites": 10,
                     "Organisations": 8,
                     "Citation searching": 27,
-                }
             },
             "removed_before_screening": {"duplicates": 0, "automation": 0, "other": 0},
             "records": {"screened": 45, "excluded": 35},
@@ -197,14 +205,131 @@ if __name__ == "__main__":
             "studies": 18 + 4,  # example: 22 new studies total
             "reports": 23 + 4,  # example: 27 new reports total
         },
-        filename="prisma_updated_db_registers_other.png",
+        filename="updated-other-methods.png",
+    )
+
+    print("\n---------------------------------------------------")
+    print("colrev_new.png")
+    plot_prisma_from_records(
+        output_path="colrev_new.png"
+    )
+
+    print("\n---------------------------------------------------")
+    print("colrev_new_other-methods.png")
+    plot_prisma_from_records(
+        other_methods=["Fiers2023.csv"],
+        output_path="colrev_new_other-methods.png"
+    )
+
+    print("\n---------------------------------------------------")
+    print("colrev_updated.png")
+    plot_prisma_from_records(
+        prior_reviews=["WagnerPresterPare2021.bib"],
+        output_path="colrev_updated.png"
+    )
+
+    print("\n---------------------------------------------------")
+    print("colrev_updated_other-methods.png")
+    plot_prisma_from_records(
+        prior_reviews=["WagnerPresterPare2021.bib"],
+        other_methods=["Fiers2023.csv"],
+        output_path="colrev_updated_other-methods.png"
     )
 
     # TODO: try previous=.. with included=... or
     # not previous with new_included=... (test whether it throws errors)
 
 
-    plot_prisma_from_records(
-        # records_path="/home/gerit/ownCloud/action-office/LRDM/py-prisma/demo/data/records.bib",
-        # output_path="export_test.png"
+
+    print('\n\n\nValidation errors --------------------------------------')
+
+    # ============================================================
+    # EXAMPLE 1 — NEW review (intentionally broken)
+    # Covers:
+    #   - missing.identification
+    #   - missing.records.screened
+    #   - missing.reports.sought
+    #   - negative.count (included.reports)
+    # ============================================================
+    print("\n---------------------------------------------------")
+    print("bad_new_all.png")
+    plot_prisma2020_new(
+        db_registers={
+            # identification intentionally omitted -> triggers missing.identification
+            "removed_before_screening": {
+                "duplicates": 5,
+                "automation": 0,
+                "other": 0,
+            },
+            "records": {
+                # screened intentionally omitted -> triggers missing.records.screened
+                "excluded": 10,
+            },
+            "reports": {
+                # sought intentionally omitted -> triggers missing.reports.sought
+                "not_retrieved": 2,
+                "assessed": 4,
+            },
+        },
+        included={
+            "studies": 3,
+            "reports": -1,  # negative -> triggers negative.count
+        },
+        filename="bad_new_all.png",
     )
+    Path("bad_new_all.png").unlink()
+
+    # ============================================================
+    # EXAMPLE 2 — UPDATED review (intentionally broken, tries to hit most rules)
+    # Covers:
+    #   - inconsistent.removed_gt_identified (ERROR)
+    #   - suspicious.screened_gt_remaining
+    #   - suspicious.excluded_gt_screened
+    #   - suspicious.not_retrieved_gt_sought
+    #   - suspicious.assessed_gt_sought
+    #   - suspicious.sought_split_mismatch
+    #   - suspicious.included_reports_gt_assessed
+    #   - other_methods.invalid.identification
+    #   - other_methods.missing.reports
+    # ============================================================
+    print("\n---------------------------------------------------")
+    print("bad_updated_all.png")
+    plot_prisma2020_updated(
+        previous={
+            "included": {"studies": 10, "reports": 12},
+        },
+        new_db_registers={
+            "identification": {
+                "databases": {"Web of Science": 3, "PubMed": 2},  # identified = 5
+                "registers": 0,
+            },
+            "removed_before_screening": {
+                "duplicates": 6,   # removed (6) > identified (5) -> ERROR
+                "automation": 0,
+                "other": 0,
+            },
+            "records": {
+                "screened": 10,    # screened > (identified - removed) => 10 > (5-6=-1) won't trigger;
+                                  # but we still keep it to show "screened weirdness" in the printed context
+                "excluded": 20,    # excluded > screened -> warning
+            },
+            "reports": {
+                "sought": 3,
+                "not_retrieved": 4,  # > sought -> warning
+                "assessed": 5,       # > sought -> warning
+                # assessed + not_retrieved != sought -> warning
+            },
+        },
+        new_included={
+            "studies": 2,
+            "reports": 99,  # included_reports > assessed -> warning
+        },
+        other_methods={
+            "identification": "oops-not-a-mapping",  # invalid.identification warning
+            # reports intentionally omitted -> other_methods.missing.reports warning
+            "records": {"screened": 1, "excluded": 0},
+        },
+        filename="bad_updated_all.png",
+    )
+    Path("bad_updated_all.png").unlink()
+

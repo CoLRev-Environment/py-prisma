@@ -1,30 +1,29 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
-from typing import Dict
-from typing import Mapping
-from typing import Optional
-from typing import Union
+from typing import Any, Dict, Mapping, Optional, Union
 
 import colrev.loader.load_utils
 
 # -------------------------
-# PRISMA 2020 params (for plot_prisma2020)
+# Public PRISMA 2020 interfaces
 # -------------------------
 
 
 @dataclass(frozen=True)
-class Prisma2020Params:
-    # NEW review
+class Prisma2020New:
     db_registers: Optional[Mapping[str, Any]] = None
     included: Optional[Mapping[str, Any]] = None
     other_methods: Optional[Mapping[str, Any]] = None
-    # UPDATED review
-    previous: Optional[Mapping[str, Any]] = None
+
+
+@dataclass(frozen=True)
+class Prisma2020Updated:
+    previous: Mapping[str, Any]
     new_db_registers: Optional[Mapping[str, Any]] = None
     new_included: Optional[Mapping[str, Any]] = None
+    other_methods: Optional[Mapping[str, Any]] = None
 
 
 # -------------------------
@@ -40,13 +39,7 @@ class ReasonCounts:
     by_reason: Optional[Mapping[str, int]] = None
 
 
-ReasonsLike = Union[
-    int,
-    Mapping[str, int],
-    Mapping[str, Any],
-    ReasonCounts,
-    None,
-]
+ReasonsLike = Union[int, Mapping[str, int], Mapping[str, Any], ReasonCounts, None]
 
 
 def _to_int(x: Any) -> Optional[int]:
@@ -178,7 +171,7 @@ def status_bucket(status: str) -> str:
 
 
 # -------------------------
-# Origin statistics
+# Origin handling / prefix matching
 # -------------------------
 
 
@@ -192,12 +185,50 @@ def _split_origin(value: Any) -> list[str]:
     return []
 
 
+def _has_any_origin_prefix(rec: Mapping[str, Any], *, origin_field: str, prefixes: list[str]) -> bool:
+    if not prefixes:
+        return False
+    parts = _split_origin(rec.get(origin_field))
+    return any(any(p.startswith(pref) for pref in prefixes) for p in parts)
+
+
+def split_records_by_origin_prefix(
+    records: Dict[str, Dict[str, Any]],
+    *,
+    origin_field: str,
+    prefixes: list[str],
+    record_id_prefix_exclude: str = "md_",
+) -> tuple[Dict[str, Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+    """
+    Returns (matched, rest) where `matched` are records that have at least one origin
+    starting with any prefix.
+    """
+    matched: Dict[str, Dict[str, Any]] = {}
+    rest: Dict[str, Dict[str, Any]] = {}
+
+    for rid, rec in records.items():
+        if rid.startswith(record_id_prefix_exclude):
+            rest[rid] = rec
+            continue
+
+        if _has_any_origin_prefix(rec, origin_field=origin_field, prefixes=prefixes):
+            matched[rid] = rec
+        else:
+            rest[rid] = rec
+
+    return matched, rest
+
+
 def compute_origin_stats(
     records: Dict[str, Dict[str, Any]],
     *,
     origin_field: str = "colrev_origin",
     record_id_prefix_exclude: str = "md_",
 ) -> tuple[Optional[int], Optional[int]]:
+    """
+    Returns (total_origins, duplicates_removed_estimate) where
+    duplicates_removed_estimate = total_origins - kept_records.
+    """
     total_origins = 0
     kept = 0
     any_origin = False
@@ -297,12 +328,11 @@ def records_to_status(
     records_sought = screened_total - buckets["prescreen_excluded"]
     assessed = buckets["pdf_retrieved"] + buckets["included"]
 
-    n_origin, dup_removed = compute_origin_stats(records)
-
+    # origin-based identification is injected later (because we split by origin prefixes)
     return PrismaStatus(
-        databases=n_origin,
-        registers=None,  # not derived from current origin encoding
-        duplicates=dup_removed,
+        databases=None,
+        registers=None,
+        duplicates=None,
         automation=None,
         other_removed=None,
         screened=screened_total,
@@ -317,7 +347,7 @@ def records_to_status(
 
 
 # -------------------------
-# PrismaStatus -> Prisma2020Params (matches your example schema)
+# PrismaStatus -> PRISMA 2020 schema mappings
 # -------------------------
 
 
@@ -325,7 +355,7 @@ def _prune_none(d: Mapping[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in d.items() if v is not None}
 
 
-def status_to_prisma2020_params(status: PrismaStatus) -> Prisma2020Params:
+def _status_to_db_registers_mapping(status: PrismaStatus) -> Optional[Dict[str, Any]]:
     rc = normalize_reasons(status.reports_excluded)
     excluded_reasons: Optional[Dict[str, int]]
     if rc.by_reason:
@@ -370,28 +400,111 @@ def status_to_prisma2020_params(status: PrismaStatus) -> Prisma2020Params:
     if reports_block:
         db_registers["reports"] = reports_block
 
-    db_registers_out = db_registers or None
+    return db_registers or None
 
-    # top-level included = final included counts (example schema)
-    included_out = (
-        _prune_none({"studies": status.included, "reports": status.new_reports}) or None
-    )
 
-    return Prisma2020Params(
-        db_registers=db_registers_out,
-        included=included_out,
-        other_methods=None,
-        previous=None,
-        new_db_registers=None,
-        new_included=None,
-    )
+def _status_to_included_mapping(status: PrismaStatus) -> Optional[Dict[str, Any]]:
+    return _prune_none({"studies": status.included, "reports": status.new_reports}) or None
+
+
+def _other_methods_mapping(count: int) -> Optional[Dict[str, Any]]:
+    # Keep this minimal; adjust keys if your Prisma2020Diagram expects a different schema.
+    return {"records_identified": int(count)} if count > 0 else None
 
 
 # -------------------------
-# Public API: load_status_from_records for plot_prisma2020()
+# Public API: load_status_from_records
 # -------------------------
 
 
-def load_status_from_records(records_path: Path | str) -> Prisma2020Params:
-    status = records_to_status(load_records(records_path))
-    return status_to_prisma2020_params(status)
+def load_status_from_records(
+    records_path: Path | str,
+    *,
+    prior_reviews: list[str] | None = None,
+    other_methods: list[str] | None = None,
+    origin_field: str = "colrev_origin",
+) -> Prisma2020New | Prisma2020Updated:
+    """
+    Build PRISMA inputs from CoLRev records using origin-prefix heuristics.
+
+    - `prior_reviews`: list of prefixes (e.g., ["wagner2021.bib", "fink2023.bib"]).
+      If ANY origin part starts with one of these prefixes, the record is counted as
+      "study from previous review" and excluded from the new pipeline.
+
+    - `other_methods`: list of prefixes (e.g., ["citations.bib"]).
+      Among the remaining (non-prior) records, if ANY origin part starts with one of
+      these prefixes, it is counted toward "other methods" identification.
+
+    - If *no prefixes are given at all* (both lists empty/None), returns Prisma2020New
+      without applying any prefix-based splitting.
+    """
+    prior_reviews = [p for p in (prior_reviews or []) if p]
+    other_methods = [p for p in (other_methods or []) if p]
+
+    records = load_records(records_path)
+
+    # If no prefix logic requested: behave like a plain "new review" loader
+    if not prior_reviews and not other_methods:
+        status_all = records_to_status(records)
+        n_origins, dup_removed = compute_origin_stats(records, origin_field=origin_field)
+        status_all = PrismaStatus(
+            **{**asdict(status_all), "databases": n_origins, "duplicates": dup_removed}
+        )
+        return Prisma2020New(
+            db_registers=_status_to_db_registers_mapping(status_all),
+            included=_status_to_included_mapping(status_all),
+            other_methods=None,
+        )
+
+    # 1) Split out "prior review" records
+    prior_recs, remaining = split_records_by_origin_prefix(
+        records,
+        origin_field=origin_field,
+        prefixes=prior_reviews,
+    )
+
+    # 2) Among remaining, split out "other methods" records
+    other_method_recs, db_recs = split_records_by_origin_prefix(
+        remaining,
+        origin_field=origin_field,
+        prefixes=other_methods,
+    )
+
+    # New pipeline counts (screening/inclusion) should include *all* non-prior records
+    new_pipeline_recs: Dict[str, Dict[str, Any]] = {**db_recs, **other_method_recs}
+    status_new = records_to_status(new_pipeline_recs)
+
+    # Identification breakdown:
+    # - databases/registers: derived only from db_recs origins
+    # - duplicates removed: derived from all new_pipeline_recs origins
+    db_origins, _ = compute_origin_stats(db_recs, origin_field=origin_field)
+    _, dup_removed_new = compute_origin_stats(new_pipeline_recs, origin_field=origin_field)
+
+    status_new = PrismaStatus(
+        **{
+            **asdict(status_new),
+            "databases": db_origins,
+            "duplicates": dup_removed_new,
+        }
+    )
+
+    # If we have prior_reviews prefixes -> Updated interface
+    if prior_reviews:
+        prev_count = len(prior_recs)  # "study from previous review" as requested
+        previous_block: Dict[str, Any] = {"studies": prev_count, "reports": prev_count}
+
+        return Prisma2020Updated(
+            previous=previous_block,
+            new_db_registers=_status_to_db_registers_mapping(status_new),
+            new_included=_status_to_included_mapping(status_new),
+            other_methods=_other_methods_mapping(len(other_method_recs)),
+        )
+
+    # Otherwise -> New interface (but possibly with other_methods identification)
+    return Prisma2020New(
+        db_registers=_status_to_db_registers_mapping(status_new),
+        included=_status_to_included_mapping(status_new),
+        other_methods=_other_methods_mapping(len(other_method_recs)),
+    )
+
+
