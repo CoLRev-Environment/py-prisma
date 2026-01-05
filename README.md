@@ -281,9 +281,9 @@ Validation is designed to be:
 
 **Example validation message**
 
-> **WARNING**: Included exceeds assessed
-> In the databases/registers lane, more reports are included than were assessed for eligibility.
-> *Fix*: Reduce included reports or increase reports.assessed if assessed is incomplete.
+> **WARNING**: Included exceeds assessed  
+> In the databases/registers lane, more reports are included than were assessed for eligibility.  
+> *Fix*: Reduce included reports or increase reports.assessed if assessed is incomplete.  
 > *Rule*: included.reports ≤ db_registers.reports.assessed
 
 ### What is checked
