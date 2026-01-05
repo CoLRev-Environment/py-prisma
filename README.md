@@ -265,6 +265,66 @@ As part of the CoLRev workflow:
 }
 ```
 
+TODO: document how updated reviews and other search methods are added in the CoLRev workflow.
+
+## Validation
+
+The package validates PRISMA 2020 flow data before (and during) plotting
+to catch impossible counts and highlight suspicious inconsistencies
+early.
+
+Validation is designed to be:
+
+-   **Non-blocking by default**: validation can be turned off, emit
+    warnings, or raise errors
+-   **User-friendly**: issues are reported with clear explanations and
+    suggested fixes
+
+**Example validation message**
+
+``` text
+WARNING: Included exceeds assessed
+In the databases/registers lane, more reports are included than were assessed for eligibility.
+Fix: Reduce included reports or increase reports.assessed if assessed is incomplete.
+Rule: included.reports ≤ db_registers.reports.assessed
+```
+
+### What is checked
+
+**Required structure**
+
+-   Presence of required top-level blocks for **new** and **updated**
+    reviews
+-   Presence of the main databases/registers lane
+-   Presence of included and previous blocks where required
+
+**Count validity**
+
+-   No negative counts anywhere
+-   Included study/report counts are non-negative
+
+**Identification and screening consistency**
+
+-   Removed records do not exceed identified records
+-   Screened records do not exceed available records
+-   Excluded records do not exceed screened records
+
+**Full-text assessment consistency**
+
+-   Reports sought is present
+-   Reports not retrieved do not exceed reports sought
+-   Reports assessed do not exceed reports sought
+-   Assessed + not retrieved matches sought
+
+**Included plausibility**
+
+-   Included reports do not exceed assessed reports
+
+**Other-methods lane**
+
+-   Structural validity of `other_methods` blocks
+-   Plausibility of counts if records or reports are provided
+
 ## License
 
 This project is distributed under the [MIT License](LICENSE).
