@@ -36,6 +36,15 @@ It supports:
 - **Updated reviews** (previous + new studies)
 - **Other search methods** (optional extension)
 
+> ⚠️ **Important distinction**
+>
+> The **semantics of boxes differ between _new reviews_ and _updated reviews_**.
+>
+> In **updated reviews**, all counts refer **only to newly identified and newly assessed records**  
+> (i.e., *excluding* studies included in previous versions of the review).
+>
+> This distinction follows PRISMA 2020 guidance and is enforced by the API.
+
 You can either:
 
 - pass structured counts programmatically, or
