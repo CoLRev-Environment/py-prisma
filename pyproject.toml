@@ -19,7 +19,7 @@ repository = "https://github.com/CoLRev-Environment/prisma-flow-diagram"
 packages = ["src/prisma_flow_diagram"]
 
 [tool.colrev]
-colrev_doc_description = "Py-PRISMA"
+colrev_doc_description = "prisma-flow-diagram"
 colrev_doc_link = "README.md"
 search_types = []
 

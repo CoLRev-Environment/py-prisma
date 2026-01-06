@@ -5,12 +5,12 @@
 
 <div align="center">
 
-[![PyPI - Version](https://img.shields.io/pypi/v/prisma-flow-diagram?color=blue)](https://pypi.org/project/prisma-flow-diagram/)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/prisma-flow-diagram)](https://pypi.org/project/prisma-flow-diagram/)
+[![PyPI - Version](https://img.shields.io/pypi/v/prisma-flow-diagram)](https://pypi.org/project/prisma-flow-diagram/)
 [![GitHub last commit](https://img.shields.io/github/last-commit/CoLRev-Environment/prisma-flow-diagram)](https://github.com/CoLRev-Environment/prisma-flow-diagram/commits/main)
 [![License](https://img.shields.io/github/license/CoLRev-Environment/prisma-flow-diagram.svg)](https://github.com/CoLRev-Environment/prisma-flow-diagram/blob/main/LICENSE)
 
 <!--
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/prisma-flow-diagram)](https://pypi.org/project/prisma-flow-diagram/)
 [![DOI](https://zenodo.org/badge/363073613.svg)](https://zenodo.org/badge/latestdoi/363073613)
 ![Documentation Status](https://img.shields.io/github/actions/workflow/status/CoLRev-Environment/colrev/docs_deploy.yml?label=documentation)
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/CoLRev-Environment/colrev/tests.yml?label=tests)
