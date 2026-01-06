@@ -1,4 +1,30 @@
-# prisma-flow-diagram: A Python Package for PRISMA Flow Diagrams
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/CoLRev-Environment/prisma-flow-diagram/refs/heads/main/docs/figures/logo_small.png" width="400">
+</p>
+
+<div align="center">
+
+[![PyPI - Version](https://img.shields.io/pypi/v/prisma-flow-diagram?color=blue)](https://pypi.org/project/prisma-flow-diagram/)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/prisma-flow-diagram)
+![GitHub last commit](https://img.shields.io/github/last-commit/CoLRev-Ecosystem/prisma-flow-diagram)
+[![License](https://img.shields.io/github/license/CoLRev-Ecosystem/prisma-flow-diagram.svg)](https://github.com/CoLRev-Environment/prisma-flow-diagram/releases/)
+
+<!--
+[![DOI](https://zenodo.org/badge/363073613.svg)](https://zenodo.org/badge/latestdoi/363073613)
+![Documentation Status](https://img.shields.io/github/actions/workflow/status/CoLRev-Ecosystem/colrev/docs_deploy.yml?label=documentation)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/CoLRev-Ecosystem/colrev/tests.yml?label=tests)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/CoLRev-Ecosystem/colrev/main.svg)](https://results.pre-commit.ci/latest/github/CoLRev-Ecosystem/colrev/main)
+![Coverage](https://raw.githubusercontent.com/CoLRev-Ecosystem/colrev/main/tests/coverage.svg)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/bd4e44c6cda646e4b9e494c4c4d9487b)](https://app.codacy.com/gh/CoLRev-Environment/colrev/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
+[![Downloads](https://static.pepy.tech/badge/colrev/month)](https://pepy.tech/project/colrev)
+[![OpenSSF Best Practices](https://bestpractices.coreinfrastructure.org/projects/7148/badge)](https://bestpractices.coreinfrastructure.org/projects/7148)
+[![SWH](https://archive.softwareheritage.org/badge/origin/https://github.com/CoLRev-Environment/colrev/)](https://archive.softwareheritage.org/browse/origin/?origin_url=https://github.com/CoLRev-Environment/colrev/)
+-->
+
+# A Python Package for PRISMA Flow Diagrams
+
+</div>
 
 This packages creates PRISMA 2020--style flow diagrams using matplotlib.
 You provide counts for each step of your screening process, and it generates a PRISMA 2020 flow diagrams.
@@ -39,6 +65,8 @@ pip install py-prisma
 ## Public API
 
 ```python
+from prisma_flow_diagram import plot_prisma2020_new, plot_prisma2020_updated
+
 def plot_prisma2020_new(
     *,
     db_registers: Mapping[str, Any],
@@ -244,7 +272,7 @@ plot_prisma2020_updated(
 ## Working with CoLRev Records
 
 ```python
-from py_prisma import plot_prisma_from_records
+from prisma_flow_diagram import plot_prisma_from_records
 
 plot_prisma_from_records(filename="prisma_from_records.png")
 ```
